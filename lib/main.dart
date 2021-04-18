@@ -181,6 +181,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       title: Text(itemRef.name.substring(0,itemRef.name.indexOf('.'))),
                       onTap: () => {
                         setState(() => {
+                          currentCase = itemRef.name.substring(0,itemRef.name.indexOf('.')),
                               _loading = true,
                             }),
                         Navigator.pop(context),
@@ -194,6 +195,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     setState(() {});
   }
   IconData infoIcon = Icons.info;
+  String currentCase = "";
   String info = "This is a bunch of text data.\n"
       "This is a line break to see if it works\n\n\n"
       "Should work even if multiple lines\nScroll\nDown\nIf\nneeded";
@@ -249,10 +251,30 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     return Container(height: 0,);
   }
+  Widget nameViewer() {
+    if (currentCase.length > 0) {
+      return Positioned(
+        left: -7,
+        top: -7,
+        child: Container(
+          padding: EdgeInsets.all(15),
+          decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all( color: Colors.red, width: 7) ,
+              borderRadius: BorderRadius.only(bottomRight: Radius.circular(15))
+          ),
+          child: Text(currentCase, style: TextStyle(fontSize: 30),),
+        ),
+      );
+    }
+    return Container();
+  }
+
   @override
   Widget build(BuildContext context) {
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text("Temple Philly Derm"),
       ),
@@ -276,20 +298,25 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       _loading
           ? loadingWidget
           :
-      InteractiveViewer(
-        panEnabled: true, // Set it to false to prevent panning.
-        boundaryMargin: EdgeInsets.all(80),
-        minScale: 0.5,
-        maxScale: 4,
-        constrained: true,
-        clipBehavior: Clip.none,
-        transformationController: _transformationController,
-        child:
-        Container(
-          color: Colors.white,
-          alignment: Alignment.center,
-          child: _image,
-        ),
+      Stack(
+        children: [
+          InteractiveViewer(
+            panEnabled: true, // Set it to false to prevent panning.
+            boundaryMargin: EdgeInsets.all(80),
+            minScale: 0.5,
+            maxScale: 4,
+            constrained: true,
+            clipBehavior: Clip.none,
+            transformationController: _transformationController,
+            child:
+            Container(
+              color: Colors.white,
+              alignment: Alignment.center,
+              child: _image,
+            ),
+          ),
+          nameViewer()
+        ],
       ),
 
       floatingActionButton: Row(
