@@ -61,9 +61,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     updateDrawer();
     slideController = TransformationController();
 
-    _image = Image.network("assets/t.jpeg",
-
-    );
+    _image = Image.network("assets/t.jpeg",);
     _loading = false;
     infoTiles = info.map((e) => Container(
       padding: EdgeInsets.all(20),
@@ -170,13 +168,63 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
+  String rawInfo;
+  List<String> caseSections;
 
+  updateInfo(firebase_storage.Reference itemRef) async {
+    print('downloading text data' + itemRef.fullPath);
+       final a = await itemRef.getDownloadURL();
+       final b = await http.get(Uri.parse(a) );
+
+       print(b);
+       rawInfo = String.fromCharCodes(b.bodyBytes);
+       caseSections = rawInfo.split(']');
+       updateCurrentInfo();
+  }
+  updateCurrentInfo() {
+    info = [
+      "No information for this case",
+      "Click on another case for more information!"
+    ];
+    if (currentCase.length > 1) {
+      caseSections.asMap().forEach((key, raw) {
+        String value = raw.toString();
+
+        if (value.toUpperCase().substring(0, 20).contains(currentCase.toUpperCase())) {
+          print(value.indexOf("."));
+          print(value.split("."));
+          print(value);
+          int index = currentCase.length + 2;
+          info = value.substring(index).split("\n");
+          info.removeWhere((element) => element.length < 2);
+          infoTiles = info.map((e) => Container(
+            padding: EdgeInsets.all(20),
+            child:  Container(
+
+              padding: EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.8),
+                // border: Border.all(color: Colors.black, width: 1),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child:  Text(e,maxLines: null, style: TextStyle(color: Colors.white), ),),
+          )).toList();
+          print(infoTiles.length);
+
+        }
+      });
+      setState(() {
+
+      });
+    }
+
+  }
 
   List<Widget> drawerItems = [
   ];
 
   updateDrawer() {
-    drawerItems = [ElevatedButton(onPressed: updateDrawer, child: Text('Refresh'))];
+
     var listRef = storage.ref().child('/temple/');
 
     listRef
@@ -185,36 +233,44 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               res.items.forEach((itemRef) => {
                     // All the items under listRef.
                     print(itemRef),
-
-
+                if (itemRef.fullPath.endsWith('.txt')){
+                  updateInfo(itemRef),
+                }else
+                  {
                     drawerItems.add(ListTile(
-                      title: Text(itemRef.name.substring(0,itemRef.name.indexOf('.')).replaceAll("_", " "),),
-                      onTap: () => {
-                        setState(() => {
-                          print('setting state to' + itemRef.name.substring(0,itemRef.name.indexOf('.')).replaceAll("_", " "),),
-                          currentCase = itemRef.name.substring(0,itemRef.name.indexOf('.')).replaceAll("_", " "),
+                      title: Text(
+                        itemRef.name.substring(0, itemRef.name.indexOf('.'))
+                            .replaceAll("_", " "),),
+                      onTap: () =>
+                      {
+                        setState(() =>
+                        {
+                          print('setting state to' + itemRef.name.substring(
+                              0, itemRef.name.indexOf('.')).replaceAll(
+                              "_", " "),),
+                          currentCase = itemRef.name.substring(0,
+                              itemRef.name.indexOf('.')).replaceAll("_", " "),
+                          updateCurrentInfo(),
+                          if (showInformation) {
+                            _showInfo()
+                          },
                           _loading = true,
                         }),
                         Navigator.pop(context),
                         initImage(itemRef.fullPath)
                       },
                     ))
+                  }
                   }),
     setState(() {}),
             })
         .onError((error, stackTrace) => null);
-
-
   }
   IconData infoIcon = Icons.info;
   String currentCase = "";
   List<String> info = [
-    "No information",
-    "IMG_1990 this is a bunch of text data."
-      "This is a line break to see if it works\n\n\n"
-      "Should work even if multiple lines\nScroll\nDown\nIf\nneeded",
-    'IMG_1994 This could be whatever information is needed',
-    'IMG_1996 this could be multiple pictures'
+    "No information for this case",
+    "Click on another case for more information!"
   ];
 
 
@@ -225,7 +281,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       showInformation = !showInformation;
       if (showInformation) {
         infoIcon = Icons.download_outlined;
-        infoHeight = MediaQuery.of(context).size.height * 2 / 3;
+        if (infoTiles.length*100 < MediaQuery.of(context).size.height * 2 / 3) {
+          infoHeight =  infoTiles.length*100.toDouble();
+        }else{
+          infoHeight = MediaQuery.of(context).size.height * 2 / 3;
+        }
+
       }else{
         infoIcon = Icons.info;
         infoHeight = 0;
@@ -268,7 +329,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
     return Container();
   }
-  List<Widget> infoTiles = [];
+  List<Container> infoTiles = [];
 
   @override
   Widget build(BuildContext context) {
@@ -319,20 +380,25 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             bottom: 0,
             left: 0,
             child: Container(
-              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width / 2),
+
+
+
               child: AnimatedContainer(
                 // Use the properties stored in the State class.
                 child: Container(
-                  alignment: Alignment.bottomLeft,
+
+
                   child: SingleChildScrollView(
                     child: Column(
+
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: infoTiles,
                     ),
                   ),
                 ),
-                height: infoHeight,
+
+                constraints: BoxConstraints(maxHeight: infoHeight),
                 decoration: BoxDecoration(
                   color: infoColor,
                 ),
