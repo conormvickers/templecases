@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:html';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' as foundation;
 import 'package:flutter/foundation.dart';
 import 'dart:typed_data';
@@ -26,7 +27,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Temple Dermatology Viewer',
       theme: ThemeData(
         primarySwatch: Colors.red,
         // This makes the visual density adapt to the platform that you run
@@ -64,7 +65,20 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     );
     _loading = false;
+    infoTiles = info.map((e) => Container(
+      padding: EdgeInsets.all(20),
+      child:  Container(
+
+        padding: EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: Colors.grey.withOpacity(0.8),
+              // border: Border.all(color: Colors.black, width: 1),
+          borderRadius: BorderRadius.circular(15),
+        ),
+          child:  Text(e,maxLines: null, style: TextStyle(color: Colors.white), ),),
+    )).toList();
   }
+
 
 
   final TransformationController _transformationController =
@@ -124,10 +138,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
   initImage(String fullPath, [bool firebase = true]) async {
 
-    setState(() {
-      fetchResult = 'Initialized App';
-      updateDrawer();
-    });
+
 
     if (firebase) {
       ref = storage.ref('/').child(fullPath);
@@ -153,7 +164,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           print('Networkimage is fully loaded and saved' );
             setState(() {
               _loading = false;
-
             });
         },
       ),
@@ -166,47 +176,59 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   ];
 
   updateDrawer() {
-    drawerItems = [];
+    drawerItems = [ElevatedButton(onPressed: updateDrawer, child: Text('Refresh'))];
     var listRef = storage.ref().child('/temple/');
+
     listRef
         .listAll()
         .then((res) => {
-              res.prefixes.forEach((folderRef) => {
-                    print(folderRef),
-                  }),
               res.items.forEach((itemRef) => {
                     // All the items under listRef.
                     print(itemRef),
+
+
                     drawerItems.add(ListTile(
-                      title: Text(itemRef.name.substring(0,itemRef.name.indexOf('.'))),
+                      title: Text(itemRef.name.substring(0,itemRef.name.indexOf('.')).replaceAll("_", " "),),
                       onTap: () => {
                         setState(() => {
-                          currentCase = itemRef.name.substring(0,itemRef.name.indexOf('.')),
-                              _loading = true,
-                            }),
+                          print('setting state to' + itemRef.name.substring(0,itemRef.name.indexOf('.')).replaceAll("_", " "),),
+                          currentCase = itemRef.name.substring(0,itemRef.name.indexOf('.')).replaceAll("_", " "),
+                          _loading = true,
+                        }),
                         Navigator.pop(context),
                         initImage(itemRef.fullPath)
                       },
                     ))
                   }),
+    setState(() {}),
             })
         .onError((error, stackTrace) => null);
 
-    setState(() {});
+
   }
   IconData infoIcon = Icons.info;
   String currentCase = "";
-  String info = "This is a bunch of text data.\n"
+  List<String> info = [
+    "No information",
+    "IMG_1990 this is a bunch of text data."
       "This is a line break to see if it works\n\n\n"
-      "Should work even if multiple lines\nScroll\nDown\nIf\nneeded";
+      "Should work even if multiple lines\nScroll\nDown\nIf\nneeded",
+    'IMG_1994 This could be whatever information is needed',
+    'IMG_1996 this could be multiple pictures'
+  ];
 
+
+  double infoHeight = 0;
+  Color infoColor = Colors.transparent;
   _showInfo() {
     setState(() {
       showInformation = !showInformation;
       if (showInformation) {
         infoIcon = Icons.download_outlined;
+        infoHeight = MediaQuery.of(context).size.height * 2 / 3;
       }else{
         infoIcon = Icons.info;
+        infoHeight = 0;
       }
     });
   }
@@ -227,30 +249,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
 
   bool showInformation = false;
-  Widget bottomField() {
-    if (showInformation) {
-      return Container(height: 100, color: Colors.black26,
 
-      child: Row(
-        children: [Expanded(child: Container()),
-          SingleChildScrollView(
-            child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 50),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(15)
-                ),
-                child: Text( 'Case Information:\n\n' + info, style: TextStyle(color: Colors.black),)
-
-            ),
-          ),
-          Expanded(child: Container())
-        ],
-      ),);
-    }
-
-    return Container(height: 0,);
-  }
   Widget nameViewer() {
     if (currentCase.length > 0) {
       return Positioned(
@@ -259,16 +258,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         child: Container(
           padding: EdgeInsets.all(15),
           decoration: BoxDecoration(
-              color: Colors.white,
+              color: Colors.red,
               border: Border.all( color: Colors.red, width: 7) ,
               borderRadius: BorderRadius.only(bottomRight: Radius.circular(15))
           ),
-          child: Text(currentCase, style: TextStyle(fontSize: 30),),
+          child: Text(currentCase, style: TextStyle(fontSize: 30 , color: Colors.white),),
         ),
       );
     }
     return Container();
   }
+  List<Widget> infoTiles = [];
 
   @override
   Widget build(BuildContext context) {
@@ -293,7 +293,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             ...drawerItems],
         ),
       ),
-      bottomNavigationBar: bottomField(),
       body:
       _loading
           ? loadingWidget
@@ -315,15 +314,51 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               child: _image,
             ),
           ),
-          nameViewer()
+          nameViewer(),
+          Positioned(
+            bottom: 0,
+            left: 0,
+            child: Container(
+              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width / 2),
+              child: AnimatedContainer(
+                // Use the properties stored in the State class.
+                child: Container(
+                  alignment: Alignment.bottomLeft,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: infoTiles,
+                    ),
+                  ),
+                ),
+                height: infoHeight,
+                decoration: BoxDecoration(
+                  color: infoColor,
+                ),
+                // Define how long the animation should take.
+                duration: Duration(seconds: 1),
+                // Provide an optional curve to make the animation feel smoother.
+                curve: Curves.fastOutSlowIn,
+              ),
+            ),
+          ),
+
         ],
       ),
 
       floatingActionButton: Row(
         mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          FloatingActionButton(
-            onPressed: () => {_showInfo()},
+
+          Expanded(
+            child: Container()
+          ),
+        FloatingActionButton(
+            onPressed: () => {
+
+              _showInfo()},
             tooltip: 'Information',
             child: Icon(infoIcon),
           ),
