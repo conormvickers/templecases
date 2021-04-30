@@ -347,7 +347,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               child: Column(
                 children: [
                   Expanded(child: Container(child: Image.asset('tt.png', fit: BoxFit.contain,))),
-                  Text('Today''s Cases')
+                  Text("Today's Cases")
                 ],
               ),
             ) ,),
