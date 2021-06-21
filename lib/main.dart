@@ -61,7 +61,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     updateDrawer();
     slideController = TransformationController();
 
-    _image = Image.network("assets/t.jpeg",);
+    _image = Image.network("assets/t.jpeg", fit: BoxFit.fitHeight,);
     _loading = false;
     infoTiles = info.map((e) => Container(
       padding: EdgeInsets.all(20),
@@ -160,6 +160,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       ImageStreamListener(
             (info, call) {
           print('Networkimage is fully loaded and saved' );
+          updateCurrentInfo();
             setState(() {
               _loading = false;
             });
@@ -189,18 +190,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     if (currentCase.length > 1) {
       caseSections.asMap().forEach((key, raw) {
         String value = raw.toString();
+        print('checking | ' + value.toUpperCase().substring(0, 10) + '|' + currentCase.toUpperCase().substring(0,6) );
+        if (value.toUpperCase().substring(0, 7).contains(currentCase.toUpperCase().substring(0,6))) {
+                    print(value);
 
-        if (value.toUpperCase().substring(0, 20).contains(currentCase.toUpperCase())) {
-          print(value.indexOf("."));
-          print(value.split("."));
-          print(value);
-          int index = currentCase.length + 2;
-          info = value.substring(index).split("\n");
+          info = value.substring(value.indexOf(',') + 2).split("\n");
           info.removeWhere((element) => element.length < 2);
           infoTiles = info.map((e) => Container(
             padding: EdgeInsets.all(20),
             child:  Container(
-
               padding: EdgeInsets.all(15),
               decoration: BoxDecoration(
                 color: Colors.grey.withOpacity(0.8),
@@ -209,7 +207,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               ),
               child:  Text(e,maxLines: null, style: TextStyle(color: Colors.white), ),),
           )).toList();
-          print(infoTiles.length);
+          print('number of tiles: ' + infoTiles.length.toString() );
 
         }
       });
@@ -250,7 +248,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                               "_", " "),),
                           currentCase = itemRef.name.substring(0,
                               itemRef.name.indexOf('.')).replaceAll("_", " "),
-                          updateCurrentInfo(),
+
                           if (showInformation) {
                             _showInfo()
                           },
@@ -368,12 +366,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             constrained: true,
             clipBehavior: Clip.none,
             transformationController: _transformationController,
-            child:
-            Container(
-              color: Colors.white,
-              alignment: Alignment.center,
-              child: _image,
-            ),
+            child: Center(child: _image)
           ),
           nameViewer(),
           Positioned(
