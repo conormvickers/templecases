@@ -23,18 +23,13 @@ import 'package:dots_indicator/dots_indicator.dart';
 import 'package:flutter_icons/flutter_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'firebase_options.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
-      options: FirebaseOptions(
-          apiKey: "AIzaSyBk5DL4lAaQJmICPoTCXYIdggcVLuI7PSY",
-          authDomain: "templecases.firebaseapp.com",
-          projectId: "templecases",
-          databaseURL: "https://templecases-default-rtdb.firebaseio.com",
-          storageBucket: "templecases.appspot.com",
-          messagingSenderId: "634631322520",
-          appId: "1:634631322520:web:5ed158e651eaf0b8b389ed",
-          measurementId: "G-NZP88GJ70M"));
+    options: DefaultFirebaseOptions.web,
+  );
   runApp(MyApp());
 }
 
@@ -229,49 +224,50 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   double images_total = 0;
 
   initImage(String fullPath) async {
+    current_image = fullPath;
     setState(() {
       _loading = true;
       images = [];
       images_progress = 0;
     });
-    current_index = int.parse(fullPath);
-    ref = storage.ref('/').child(fullPath + "/");
-    if (status == "driver") {
-      start_sending();
-    }
+    // current_index = int.parse(fullPath);
+    ref = storage.ref(fullPath);
 
-    final all = await ref.listAll();
-    images_total = all.items.length.toDouble();
+    start_sending();
+
+    // final all = await ref.listAll();
+    // images_total = all.items.length.toDouble();
     setState(() {});
 
-    for (final element in all.items) {
-      if (element.name.endsWith(".jpeg")) {
-        String url = await element.getDownloadURL();
-        images_progress++;
-        setState(() {});
-        images.add(Image.network(url, fit: BoxFit.contain, loadingBuilder:
-            (BuildContext context, Widget child,
-                ImageChunkEvent loadingProgress) {
-          if (loadingProgress != null) {
-            print(element.name +
-                ' ' +
-                loadingProgress.cumulativeBytesLoaded.toString());
-            double percent = loadingProgress.cumulativeBytesLoaded /
-                loadingProgress.expectedTotalBytes;
-            return Container(
-              child: LinearProgressIndicator(value: percent),
-              width: 100,
-            );
-          }
-          return child;
-        }));
-      } else if (element.name.endsWith(".txt")) {
-        Uint8List downloadedData = await element.getData();
-        rawInfo = utf8.decode(downloadedData);
-      }
-    }
+    String url = "";
 
-    _image = images[current_image];
+    try {
+      url = await ref.getDownloadURL();
+    } on Exception catch (e) {
+      print(e);
+      return;
+    }
+    if (url == null) {
+      return;
+    }
+    _image = Image.network(url, fit: BoxFit.contain, errorBuilder:
+        (context, error, stackTrace) {
+      print("!!!!!" + error.toString());
+      return Text(error.toString());
+    }, loadingBuilder:
+        (BuildContext context, Widget child, ImageChunkEvent loadingProgress) {
+      if (loadingProgress != null) {
+        print(
+            ref.name + ' ' + loadingProgress.cumulativeBytesLoaded.toString());
+        double percent = loadingProgress.cumulativeBytesLoaded /
+            loadingProgress.expectedTotalBytes;
+        return Container(
+          child: LinearProgressIndicator(value: percent),
+          width: 100,
+        );
+      }
+      return child;
+    });
 
     _image.image.resolve(ImageConfiguration()).addListener(
       ImageStreamListener(
@@ -290,6 +286,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   List<String> caseSections;
 
   List<Widget> drawerItems = [];
+  List<firebase_storage.Reference> tosort = [];
+  List<String> allImageNames = [];
 
   updateDrawer() {
     print("updating drawer");
@@ -298,7 +296,27 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     List<String> d = [];
 
     listRef.listAll().then((res) {
-      res.prefixes.forEach((itemRef) => {
+      // if (res.items.length < 1) {
+      //   return;
+      // }
+
+      tosort = res.items;
+
+      tosort.sort((a, b) {
+        int aind = a.name.lastIndexOf(".");
+        if (aind > 4) {
+          aind = 4;
+        }
+
+        int bind = b.name.lastIndexOf(".");
+        if (bind > 4) {
+          bind = 4;
+        }
+        return double.parse(a.name.substring(0, aind))
+            .compareTo(double.parse(b.name.substring(0, bind)));
+      });
+
+      tosort.forEach((itemRef) => {
             // All the items under listRef.
 
             d.add(itemRef.name),
@@ -311,26 +329,32 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
             // }
           });
-      d.sort((a, b) {
-        return int.parse(a).compareTo(int.parse(b));
-      });
+
+      allImageNames = [];
       d.forEach(((element) {
+        allImageNames.add(element);
         drawerItems.add(ListTile(
-          title: Text(element),
+          title: Text(
+            element,
+            style: TextStyle(color: Colors.black),
+          ),
           onTap: () {
-            current_index = int.parse(element);
-            current_image = 0;
+            // current_index = int.parse(element);
+
             Navigator.pop(context);
             initImage(element);
           },
         ));
       }));
+
       setState(() {});
-    }).onError((error, stackTrace) => null);
+    }).onError((error, stackTrace) {
+      print(error);
+    });
   }
 
   IconData infoIcon = Icons.info;
-  int current_image = 0;
+  String current_image = "";
   List<String> info = [
     "No information for this case",
     "Click on another case for more information!"
@@ -348,7 +372,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           SpinKitCubeGrid(
             color: Colors.red,
           ),
-          Text('Loading #' + current_index.toString()),
+          Text('Loading ' + current_image.toString()),
           images.length > 0
               ? Container(
                   width: 100,
@@ -377,9 +401,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   bool sending = false;
   start_sending() async {
     String b = printMarker();
+    if (status != "driver") {
+      return;
+    }
+    if (sending) {
+      return;
+    }
+    // String b = printMarker();
 
     if (b != last_set) {
       print("sending update");
+      sending = true;
       last_set = b;
       // goToMarker(b);
 
@@ -392,6 +424,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       await database.ref("trans").set({"a": b});
 
       Future.delayed(Duration(seconds: 1), (() {
+        sending = false;
         start_sending();
       }));
     } else {
@@ -406,14 +439,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   start_listener() {
     subscription = database.ref("trans").onValue.listen((event) {
       print(event.snapshot.value);
-      final e = event.snapshot.value as Map;
-      String stra = e["a"];
-      goToMarker(stra);
+      if (event.snapshot.value != null && status != "driver") {
+        final e = event.snapshot.value as Map;
+        String stra = e["a"];
+        goToMarker(stra);
+      }
     });
 
     driver_info_subscription = database.ref("driver").onValue.listen((event) {
       print(event.snapshot.value);
-      if (event.snapshot.value != null) {
+      if (event.snapshot.value != null && status != "driver") {
         final e = event.snapshot.value as Map;
         driver_name = e["driver"];
         showInformation = e["show_info"] ?? false;
@@ -423,7 +458,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     });
 
     penSubscription = database.ref("draw").onValue.listen((event) {
-      if (event.snapshot.value != null) {
+      if (event.snapshot.value != null && status != "driver") {
         final e = event.snapshot.value as Map;
 
         final xs = e["dx"];
@@ -435,9 +470,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         if (xs.asMap().length != ys.asMap().length) {
           return;
         }
-        points = [];
+        points.add([]);
+        if (points.length > 10) {
+          points.removeAt(0);
+        }
         xs.asMap().forEach((key, value) {
-          points.add(Offset(value, ys[key]));
+          points.last.add(Offset(value, ys[key]));
         });
         setState(() {});
       }
@@ -451,70 +489,94 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     penSubscription.cancel();
   }
 
+  List<Widget> pointWidget() {
+    List<Widget> toret = [];
+    points.asMap().forEach((key, value) {
+      if (value.length > 1) {
+        toret.add(AnimatedOpacity(
+          duration: Duration(seconds: 3),
+          opacity: key == points.length - 1 ? 1 : 0,
+          child: CustomPaint(
+            size: Size(4000, 3000),
+            child: Container(
+              width: 4000,
+              height: 3000,
+            ),
+            painter: penPainter(key),
+          ),
+        ));
+      }
+    });
+    return toret;
+  }
+
   GlobalKey view_key = GlobalKey();
   GlobalKey test_key = GlobalKey();
   String name = "?";
+  bool debuglines = false;
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        actions: [
-          Center(
-            child: Text(
-              "Case #" + current_index.toString() + "  ",
-              style: TextStyle(fontSize: 22),
-            ),
-          )
-        ],
-        title: Row(
-          children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                OutlinedButton(
-                    onPressed: (() {
-                      askName();
-                    }),
-                    child: Text(
-                      name,
-                      style: TextStyle(color: Colors.white),
-                    )),
-                Text(
-                  "name",
-                  style: TextStyle(fontSize: 10),
-                ),
+      appBar: status == "driver"
+          ? AppBar(
+              actions: [
+                Center(
+                  child: Text(
+                    "Case #" + current_index.toString() + "  ",
+                    style: TextStyle(fontSize: 22),
+                  ),
+                )
               ],
-            ),
-            Container(
-              width: 10,
-            ),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Container(
-                    child: Text(
-                  status,
-                  style: TextStyle(color: Colors.white),
-                )),
-                Text(
-                  "status",
-                  style: TextStyle(fontSize: 10),
-                ),
-              ],
-            ),
-            Container(
-              width: 10,
-            ),
-            status == "disconnected"
-                ? Icon(FlutterIcons.unlink_faw)
-                : Icon(FlutterIcons.cloud_check_mco),
-            Container(
-              width: 10,
-            ),
-          ],
-        ),
-      ),
+              title: Row(
+                children: [
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      OutlinedButton(
+                          onPressed: (() {
+                            askName();
+                          }),
+                          child: Text(
+                            name,
+                            style: TextStyle(color: Colors.white),
+                          )),
+                      Text(
+                        "name",
+                        style: TextStyle(fontSize: 10),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    width: 10,
+                  ),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Container(
+                          child: Text(
+                        status,
+                        style: TextStyle(color: Colors.white),
+                      )),
+                      Text(
+                        "status",
+                        style: TextStyle(fontSize: 10),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    width: 10,
+                  ),
+                  status == "disconnected"
+                      ? Icon(FlutterIcons.unlink_faw)
+                      : Icon(FlutterIcons.cloud_check_mco),
+                  Container(
+                    width: 10,
+                  ),
+                ],
+              ),
+            )
+          : null,
       drawer: Drawer(
         child: ListView(
           children: [
@@ -533,7 +595,20 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 ),
               ),
             ),
-            ...drawerItems
+            ...drawerItems,
+            ListTile(
+                title: Container(
+                    color: Colors.red,
+                    child: Row(children: [
+                      Expanded(child: Text("Debugging lines")),
+                      Switch(
+                        value: debuglines,
+                        onChanged: (value) {
+                          debuglines = value;
+                          setState(() {});
+                        },
+                      )
+                    ])))
           ],
         ),
       ),
@@ -545,159 +620,114 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 ? loadingWidget()
                 : Stack(
                     children: [
-                      Column(
+                      Stack(
                         children: [
-                          Expanded(
-                            child: Stack(
-                              children: [
-                                Center(
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                        border: Border.all(
-                                            color: Colors.grey, width: 1)),
-                                    child: InteractiveViewer(
-                                      key: view_key,
-                                      scaleEnabled: !pen_enabled,
-                                      panEnabled:
-                                          !pen_enabled, // Set it to false to prevent panning.
-                                      boundaryMargin: EdgeInsets.all(80),
-
-                                      minScale: 0.5,
-                                      maxScale: 8,
-                                      constrained: true,
-                                      clipBehavior: Clip.none,
-
-                                      onInteractionEnd: (details) {
-                                        if (status == "driver") {
-                                          if (!sending) {
-                                            sending = true;
-                                            start_sending();
-                                          } else {
-                                            print("sending bool is off");
-                                          }
-                                        }
-                                      },
-                                      transformationController:
-                                          _transformationController,
-                                      child: FittedBox(
-                                        child: Stack(
-                                          children: [
-                                            Container(
-                                              height: 1000,
-                                              width: 1000,
-                                              child: FittedBox(child: _image),
-                                            ),
-                                            points.length > 2
-                                                ? FittedBox(
-                                                    child: CustomPaint(
-                                                      size: Size(1000, 1000),
-                                                      painter: penPainter(),
-                                                    ),
-                                                  )
-                                                : Container(),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                IgnorePointer(
-                                  ignoring: !pen_enabled,
-                                  child: Center(
-                                    child: FittedBox(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                            border: Border.all(
-                                                color: Colors.black)),
-                                        height: 1000,
-                                        width: 1000,
-                                        child: pen_enabled
-                                            ? GestureDetector(
-                                                onPanStart: (details) {
-                                                  print("tap!");
-                                                  points = [];
-                                                  add_point(
-                                                      details.localPosition);
-                                                },
-                                                onPanUpdate: (details) {
-                                                  add_point(
-                                                      details.localPosition);
-                                                },
-                                                onPanEnd: (details) async {
-                                                  last_point = Offset(0, 0);
-                                                  final point_storex = points
-                                                      .map((e) => e.dx)
-                                                      .toList();
-                                                  final point_storey = points
-                                                      .map((e) => e.dy)
-                                                      .toList();
-                                                  await database
-                                                      .ref("draw")
-                                                      .child("dx")
-                                                      .set(point_storex);
-                                                  await database
-                                                      .ref("draw")
-                                                      .child("dy")
-                                                      .set(point_storey);
-                                                },
-                                              )
-                                            : Container(),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          showInformation ? Divider() : Container(),
-                          showInformation
-                              ? Expanded(
-                                  child: Container(
-                                  color: Colors.white,
-                                  child: Stack(
+                          Container(
+                            decoration: BoxDecoration(
+                                border:
+                                    Border.all(color: Colors.grey, width: 1)),
+                            child: InteractiveViewer(
+                                key: view_key,
+                                scaleEnabled: !pen_enabled,
+                                panEnabled:
+                                    !pen_enabled, // Set it to false to prevent panning.
+                                boundaryMargin: EdgeInsets.all(80000),
+                                minScale: 0.5,
+                                maxScale: 8,
+                                constrained: true,
+                                clipBehavior: Clip.none,
+                                onInteractionEnd: (details) {
+                                  start_sending();
+                                },
+                                transformationController:
+                                    _transformationController,
+                                child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      SingleChildScrollView(
-                                          controller: ScrollController(),
+                                      Expanded(
                                           child: Column(
-                                            children: [
-                                              Container(
-                                                height: 20,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                            Expanded(
+                                              child: FittedBox(
+                                                child: Stack(
+                                                  children: [
+                                                    Container(
+                                                      height: 3000,
+                                                      width: 4000,
+                                                      child: _image,
+                                                    ),
+                                                    ...pointWidget(),
+                                                    IgnorePointer(
+                                                      ignoring: !pen_enabled,
+                                                      child: Container(
+                                                        decoration: BoxDecoration(
+                                                            border: Border.all(
+                                                                color: Colors
+                                                                    .black)),
+                                                        height: 3000,
+                                                        width: 4000,
+                                                        child: pen_enabled
+                                                            ? GestureDetector(
+                                                                onPanStart:
+                                                                    (details) {
+                                                                  print("tap!");
+                                                                  points
+                                                                      .add([]);
+                                                                  if (points
+                                                                          .length >
+                                                                      10) {
+                                                                    points
+                                                                        .removeAt(
+                                                                            0);
+                                                                  }
+                                                                  add_point(details
+                                                                      .localPosition);
+                                                                },
+                                                                onPanUpdate:
+                                                                    (details) {
+                                                                  add_point(details
+                                                                      .localPosition);
+                                                                },
+                                                                onPanEnd:
+                                                                    (details) async {
+                                                                  final point_storex = points
+                                                                      .last
+                                                                      .map((e) =>
+                                                                          e.dx)
+                                                                      .toList();
+                                                                  final point_storey = points
+                                                                      .last
+                                                                      .map((e) =>
+                                                                          e.dy)
+                                                                      .toList();
+                                                                  await database
+                                                                      .ref(
+                                                                          "draw")
+                                                                      .child(
+                                                                          "dx")
+                                                                      .set(
+                                                                          point_storex);
+                                                                  await database
+                                                                      .ref(
+                                                                          "draw")
+                                                                      .child(
+                                                                          "dy")
+                                                                      .set(
+                                                                          point_storey);
+                                                                },
+                                                              )
+                                                            : Container(),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
-                                              Padding(
-                                                padding:
-                                                    const EdgeInsets.all(8.0),
-                                                child: Text(content()),
-                                              ),
-                                              Container(
-                                                height: 40,
-                                              ),
-                                            ],
-                                          )),
-                                      Positioned(
-                                        right: 10,
-                                        child: ElevatedButton(
-                                            onPressed: () async {
-                                              showAnswer = !showAnswer;
-                                              if (status == "driver") {
-                                                await database
-                                                    .ref("driver")
-                                                    .set({
-                                                  "driver": name,
-                                                  "show_info": showInformation,
-                                                  "show_answer": showAnswer,
-                                                });
-                                              }
-
-                                              setState(() {});
-                                            },
-                                            child: Text(showAnswer
-                                                ? "hide answer"
-                                                : "show answer")),
-                                      ),
-                                    ],
-                                  ),
-                                ))
-                              : Container()
+                                            )
+                                          ]))
+                                    ])),
+                          ),
                         ],
                       ),
                       Positioned(
@@ -708,37 +738,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           children: [
                             OutlinedButton(
                               style: ButtonStyle(
-                                  backgroundColor: showInformation
-                                      ? MaterialStateProperty.all(Colors.red)
-                                      : MaterialStateProperty.all(
-                                          Colors.white)),
-                              onPressed: () async {
-                                showInformation = !showInformation;
-                                if (status == "driver") {
-                                  await database.ref("driver").set({
-                                    "driver": name,
-                                    "show_info": showInformation,
-                                    "show_answer": showAnswer,
-                                  });
-                                }
-                                setState(() {});
-                              },
-                              child: Icon(
-                                FlutterIcons.text_mco,
-                                color:
-                                    showInformation ? Colors.white : Colors.red,
-                              ),
-                            ),
-                            Container(
-                              height: 10,
-                            ),
-                            OutlinedButton(
-                              style: ButtonStyle(
                                   backgroundColor:
                                       MaterialStateProperty.all(Colors.white)),
-                              onPressed: () => {_animateResetInitialize()},
+                              onPressed: () {
+                                start_sending();
+                                _animateResetInitialize();
+                              },
                               child: Icon(
-                                FlutterIcons.zoom_out_mdi,
+                                FlutterIcons.fullscreen_mco,
                               ),
                             ),
                             Container(
@@ -747,78 +754,63 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           ],
                         ),
                       ),
-                      Center(
-                        child: images.length > 1
-                            ? Column(
-                                children: [
-                                  Expanded(child: Container()),
-                                  FittedBox(
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        OutlinedButton(
-                                            style: ButtonStyle(
-                                                backgroundColor:
-                                                    MaterialStateProperty.all(
-                                                        Colors.white)),
-                                            child: Icon(Icons.swipe_left_alt),
-                                            onPressed: current_image > 0
-                                                ? () {
-                                                    current_image--;
-                                                    _image =
-                                                        images[current_image];
-                                                    _animateResetInitialize();
-                                                    setState(() {});
-                                                    if (status == "driver") {
-                                                      sending = true;
-                                                      start_sending();
-                                                      clear_pen();
-                                                    }
-                                                  }
-                                                : null),
-                                        DotsIndicator(
-                                          dotsCount: images.length,
-                                          position: current_image.toDouble(),
-                                          decorator: DotsDecorator(
-                                            size: const Size.square(9.0),
-                                            activeSize: const Size(18.0, 9.0),
-                                            activeShape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(5.0)),
+                      debuglines
+                          ? IgnorePointer(
+                              ignoring: true,
+                              child: Center(
+                                child: FittedBox(
+                                  child: Column(
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Container(
+                                            width: 4000,
+                                            height: 3000,
+                                            decoration: BoxDecoration(
+                                                border: Border.all(
+                                                    width: 20,
+                                                    color: Colors
+                                                        .lightBlueAccent)),
                                           ),
-                                        ),
-                                        OutlinedButton(
-                                            style: ButtonStyle(
-                                                backgroundColor:
-                                                    MaterialStateProperty.all(
-                                                        Colors.white)),
-                                            child: Icon(Icons.swipe_right_alt),
-                                            onPressed: current_image <
-                                                    images.length - 1
-                                                ? () {
-                                                    current_image++;
-                                                    _image =
-                                                        images[current_image];
-                                                    _animateResetInitialize();
-                                                    setState(() {});
-                                                    if (status == "driver") {
-                                                      sending = true;
-                                                      start_sending();
-                                                      clear_pen();
-                                                    }
-                                                  }
-                                                : null),
-                                      ],
-                                    ),
+                                          Container(
+                                            width: 4000,
+                                            height: 3000,
+                                            decoration: BoxDecoration(
+                                                border: Border.all(
+                                                    width: 20,
+                                                    color: Colors
+                                                        .lightBlueAccent)),
+                                          ),
+                                        ],
+                                      ),
+                                      Row(
+                                        children: [
+                                          Container(
+                                            width: 4000,
+                                            height: 3000,
+                                            decoration: BoxDecoration(
+                                                border: Border.all(
+                                                    width: 20,
+                                                    color: Colors
+                                                        .lightBlueAccent)),
+                                          ),
+                                          Container(
+                                            width: 4000,
+                                            height: 3000,
+                                            decoration: BoxDecoration(
+                                                border: Border.all(
+                                                    width: 20,
+                                                    color: Colors
+                                                        .lightBlueAccent)),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
-                                  Container(
-                                    height: 10,
-                                  )
-                                ],
-                              )
-                            : Container(),
-                      ),
+                                ),
+                              ),
+                            )
+                          : Container()
                     ],
                   ),
             Column(
@@ -904,6 +896,51 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                     backgroundColor: MaterialStateProperty.all(
                                         Colors.white)),
                                 onPressed: () {
+                                  if (allImageNames.indexOf(current_image) - 1 <
+                                      0) {
+                                    return;
+                                  }
+                                  initImage(allImageNames[
+                                      allImageNames.indexOf(current_image) -
+                                          1]);
+                                  start_sending();
+                                  _animateResetInitialize();
+                                },
+                                child: Icon(
+                                  FlutterIcons.left_ant,
+                                  color: Colors.red,
+                                )),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(10.0),
+                            child: OutlinedButton(
+                                style: ButtonStyle(
+                                    backgroundColor: MaterialStateProperty.all(
+                                        Colors.white)),
+                                onPressed: () {
+                                  if (allImageNames.indexOf(current_image) +
+                                          1 >=
+                                      allImageNames.length - 1) {
+                                    return;
+                                  }
+                                  initImage(allImageNames[
+                                      allImageNames.indexOf(current_image) +
+                                          1]);
+                                  start_sending();
+                                  _animateResetInitialize();
+                                },
+                                child: Icon(
+                                  FlutterIcons.right_ant,
+                                  color: Colors.red,
+                                )),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(10.0),
+                            child: OutlinedButton(
+                                style: ButtonStyle(
+                                    backgroundColor: MaterialStateProperty.all(
+                                        Colors.white)),
+                                onPressed: () {
                                   clear_pen();
                                 },
                                 child: Icon(
@@ -940,55 +977,33 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
-  String content() {
-    if (showAnswer) {
-      return rawInfo;
-    }
-    final split = rawInfo.split("\n");
-    final f = split.where((element) => !element.contains("%")).toList();
-    final a = f
-        .join("\n")
-        .substring(0, f.join("\n").toUpperCase().indexOf("CATEGORY"));
-    return a;
-  }
-
   bool pen_enabled = false;
   double top = 0;
   double left = 0;
-  Offset last_point = Offset(0, 0);
 
   add_point(Offset localPosition) {
-    double zoom = _transformationController.value[0];
+    if (points.last.length > 0) {
+      final last_point = points.last.last;
+      if ((localPosition - last_point).distance.abs() > 20) {
+        points.last.add(localPosition);
 
-    double w = view_key.currentContext.size.width;
-    double h = view_key.currentContext.size.height;
-    double min = math.min(w, h);
-    print(w.toString() + " " + h.toString());
+        setState(() {});
+      }
+    } else {
+      if (points.last.length < 1) {
+        points.last.add(localPosition);
 
-    double x = -1 * (_transformationController.value[12] / zoom) / min;
-    double y = -1 * (_transformationController.value[13] / zoom) / min;
-    double per_top = (localPosition.dy / 1000 / zoom) + y;
-    double per_left = (localPosition.dx / 1000 / zoom) + x;
-    print(localPosition.toString() + x.toString() + ' ' + y.toString());
-
-    top = 1000 * per_top;
-    left = 1000 * per_left;
-
-    final now = Offset(left, top);
-    if ((now - last_point).distance.abs() > 10) {
-      points.add(now);
-      last_point = now;
-      setState(() {});
+        setState(() {});
+      }
     }
   }
 
   clear_pen() async {
-    points = [];
+    points.add([]);
     setState(() {});
-    final point_storex = points.map((e) => e.dx).toList();
-    final point_storey = points.map((e) => e.dy).toList();
-    await database.ref("draw").child("dx").set(point_storex);
-    await database.ref("draw").child("dy").set(point_storey);
+
+    await database.ref("draw").child("dx").set([0]);
+    await database.ref("draw").child("dy").set([0]);
   }
 
   stop_driving() async {
@@ -1040,33 +1055,35 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       w = view_key.currentContext.size.width;
       h = view_key.currentContext.size.height;
     }
-
-    double min = 0;
-    if (w > h) {
-      min = w;
-    } else {
-      min = h;
-    }
     double zoom = _transformationController.value[0];
-    double x = -1 * (_transformationController.value[12] / zoom) / min;
-    double y = -1 * (_transformationController.value[13] / zoom) / min;
-    print(current_index.toString() +
-        '*' +
-        zoom.toStringAsFixed(2) +
-        ',' +
-        x.toStringAsFixed(2) +
-        ',' +
-        y.toStringAsFixed(2) +
-        '***');
-    String j = current_index.toString() +
-        "_" +
-        current_image.toString() +
+    double xcomp = 0;
+    double ycomp = 0;
+    double xful = 0;
+    double yful = 0;
+    if (w * 3 < h * 4) {
+      xful = w;
+
+      yful = w * 3 / 4;
+      ycomp = ((yful - h) / 2) * (1 - zoom);
+    } else {
+      xful = h * 4 / 3;
+      xcomp = ((xful - w) / 2) * (1 - zoom);
+      // yful = h;
+    }
+
+    double x = ((_transformationController.value[12] + xcomp) / zoom) / xful;
+    double y = ((_transformationController.value[13] + ycomp) / zoom) / xful;
+
+    String j = current_image.toString() +
         "," +
         zoom.toString() +
         ',' +
         x.toString() +
         "," +
         y.toString();
+    print(j);
+    print(ycomp);
+    print(ycomp / y);
     return j;
   }
 
@@ -1074,68 +1091,91 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     List<String> whereSplit = where.split(',');
 
     String targetImageName = whereSplit[0];
-    String indd = targetImageName.split('_')[0];
-    String indi = targetImageName.split('_')[1];
-    print("recieved " + indd + ":" + indi);
-    if (current_index != int.parse(indd)) {
-      print("changing index to: " + (indd));
+
+    print("recieved " + targetImageName);
+    if (current_image != targetImageName) {
+      print("changing index to: " + (targetImageName));
       setState(() {
         _loading = true;
       });
-      initImage(indd);
-    } else if (current_image != int.parse(indi)) {
-      print("changing picture to: " + indi);
-      current_image = int.parse(indi);
-      if (current_image < images.length) {
-        _image = images[current_image];
-        setState(() {});
-      }
+      initImage(targetImageName);
+    } else {
+      print("already at this image: " + targetImageName);
+
+      setState(() {});
     }
 
     double zoom = double.parse(whereSplit[1]);
     double x = double.parse(whereSplit[2]);
     double y = double.parse(whereSplit[3]);
 
-    print("moving to");
-
     if (view_key.currentContext == null) {
       print("error wit getting view_key context");
       return;
     }
-    double w = view_key.currentContext.size.width;
-    double h = view_key.currentContext.size.height;
-    double min = 0;
-    if (w > h) {
-      min = w;
-    } else {
-      min = h;
-    }
 
-    last_recieved = Matrix4.fromList([
-      zoom,
-      0,
-      0,
-      0,
-      0,
-      zoom,
-      0,
-      0,
-      0,
-      0,
-      zoom,
-      0,
-      -zoom * x * (min),
-      -zoom * y * (min),
-      0,
-      1
-    ]);
-    animateToRecievedPoint();
+    try {
+      double w = 1;
+      double h = 1;
+      if (view_key.currentContext != null) {
+        w = view_key.currentContext.size.width;
+        h = view_key.currentContext.size.height;
+      }
+
+      double xful = 0;
+      double xcomp = 0;
+      double ycomp = 0;
+      double yful = 0;
+      if (w * 3 < h * 4) {
+        xful = w;
+
+        yful = w * 3 / 4;
+        ycomp = ((yful - h) / 2) * (1 - zoom);
+      } else {
+        xful = h * 4 / 3;
+        xcomp = ((xful - w) / 2) * (1 - zoom);
+        // yful = h;
+      }
+      print("moving to " +
+          zoom.toString() +
+          " " +
+          x.toString() +
+          " " +
+          y.toString());
+
+      last_recieved = Matrix4.fromList([
+        zoom,
+        0,
+        0,
+        0,
+        0,
+        zoom,
+        0,
+        0,
+        0,
+        0,
+        zoom,
+        0,
+
+        //xcomp, 0,
+
+        zoom * x * (xful) - xcomp,
+        zoom * y * (xful) - ycomp,
+        0,
+        1
+      ]);
+      animateToRecievedPoint();
+    } on Exception catch (e) {
+      print(e);
+    }
   }
 }
 
-List<Offset> points = [];
+List<List<Offset>> points = [];
 
 class penPainter extends CustomPainter {
+  penPainter(this.index);
+  int index;
   //         <-- CustomPainter class
   @override
   void paint(Canvas canvas, Size size) {
@@ -1143,9 +1183,9 @@ class penPainter extends CustomPainter {
 
     final paint = Paint()
       ..color = Colors.greenAccent
-      ..strokeWidth = 4
+      ..strokeWidth = 20
       ..strokeCap = StrokeCap.round;
-    canvas.drawPoints(pointMode, points, paint);
+    canvas.drawPoints(pointMode, points[index], paint);
   }
 
   @override
